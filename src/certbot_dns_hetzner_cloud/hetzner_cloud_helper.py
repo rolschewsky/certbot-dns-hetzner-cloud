@@ -47,5 +47,6 @@ class HetznerCloudHelper:
             records=[ZoneRecord(
                 value=value,
                 comment=comment
-            )]
+            )],
+            ttl=60
         )
