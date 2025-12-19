@@ -47,7 +47,7 @@ dns_hetzner_cloud_api_token = your_api_token_here
 
 Make sure to set the correct permissions for the configuration file to protect your API token:
 ```bash
-sudo chmod 600 /etc/letsencrypt/hetzner_cloud.ini
+sudo chmod 600 /etc/letsencrypt/hetzner-cloud.ini
 ```
 
 If you want to use a different path for the configuration file, you can specify it using the `--dns-hetzner-cloud-credentials` option when running Certbot.
