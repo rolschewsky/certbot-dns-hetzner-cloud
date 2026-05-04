@@ -18,6 +18,7 @@ def split_validation_name(validation_name: str) -> tuple[str, str]:
 
 class HetznerCloudDNSAuthenticator(dns_common.DNSAuthenticator):
     description = "Plugin for handling DNS-01 challenges via Hetzner Cloud DNS API."
+    ttl = 60
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -56,7 +57,8 @@ class HetznerCloudDNSAuthenticator(dns_common.DNSAuthenticator):
             zone=zone_name,
             name=record_name,
             value=validation,
-            comment=f"created by hetzner cloud plugin at {timestamp}"
+            comment=f"created by hetzner cloud plugin at {timestamp}",
+            ttl=self.ttl
         )
 
     def _cleanup(self, domain: str, validation_name: str, validation: str) -> None:

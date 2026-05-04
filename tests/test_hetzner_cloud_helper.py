@@ -1,5 +1,8 @@
 import pytest
 from types import SimpleNamespace
+
+from hcloud import APIException
+
 from certbot_dns_hetzner_cloud.hetzner_cloud_helper import HetznerCloudHelper
 import certbot_dns_hetzner_cloud.hetzner_cloud_helper as mod
 
@@ -48,6 +51,17 @@ class FakeZonesAPI:
         self.calls.append(("create_rrset", zone.name, name, type, tuple(r.value for r in records)))
         # Minimal-Response mit rrset zurückgeben (ähnlich hcloud)
         return SimpleNamespace(rrset=FakeRRSet(name, records[0].value))
+
+    def remove_rrset_records(self, rrset, records):
+        self.calls.append(("remove_rrset_records", rrset.name, tuple(r.value for r in records)))
+        return SimpleNamespace(wait_until_finished=lambda: None)
+
+    def add_rrset_records(self, rrset, records):
+        self.calls.append(("add_rrset_records", rrset.zone.name, rrset.name, rrset.type, rrset.ttl, tuple(r.value for r in records)))
+        # Simulate duplicate value
+        if records[0].value == 'abc1234':
+            raise APIException(code="invalid_input", message="duplicate value ..", details=None)
+        return SimpleNamespace(wait_until_finished=lambda: None)
 
 class FakeClient:
     def __init__(self):
@@ -115,7 +129,7 @@ def test_delete_txt_record_deletes_when_present(helper):
     # Erwartung: get -> get_rrset_list -> delete_rrset
     assert ("get", "example.com") in zones.calls
     assert ("get_rrset_list", "example.com", "_acme-challenge", "TXT") in zones.calls
-    assert ("delete_rrset", "_acme-challenge") in zones.calls
+    assert ("remove_rrset_records", "_acme-challenge", ('"old"',)) in zones.calls
 
 def test_delete_txt_record_noop_when_absent(helper):
     zones = helper.client.zones
@@ -125,54 +139,30 @@ def test_delete_txt_record_noop_when_absent(helper):
 
     # Kein delete_rrset-Call
     assert ("get_rrset_list", "example.com", "_acme-challenge", "TXT") in zones.calls
-    assert not [c for c in zones.calls if c[0] == "delete_rrset"]
+    assert not [c for c in zones.calls if c[0] == "remove_rrset_records"]
 
 def test_put_txt_record_quotes_value_and_replaces(helper):
     zones = helper.client.zones
-    # Vorhandenes RRSet -> sollte erst gelöscht, dann neu erstellt werden
-    zones._rrset_list = FakeRRSetListResp([FakeRRSet("_acme-challenge", '"old"')])
+    helper.put_txt_record("example.com", "_acme-challenge", value="abc123", comment="test")
 
-    resp = helper.put_txt_record("example.com", "_acme-challenge", value="abc123", comment="test")
-
-    # Reihenfolge prüfen: get → get_rrset_list → delete_rrset → create_rrset
+    # Reihenfolge prüfen: get → add_rrset_records
     names = [c[0] for c in zones.calls]
-    assert names[:4] == ["get", "get_rrset_list", "delete_rrset", "create_rrset"]
+    assert names[:2] == ["get", "add_rrset_records"]
 
-    # create_rrset wurde mit gequotetem Value aufgerufen:
-    create_call = [c for c in zones.calls if c[0] == "create_rrset"][-1]
-    _, zone_name, rr_name, rr_type, values = create_call
+    # add_rrset_records wurde mit gequotetem Value aufgerufen:
+    create_call = [c for c in zones.calls if c[0] == "add_rrset_records"][-1]
+    _, zone_name, rr_name, rr_type, rr_ttl, values = create_call
     assert zone_name == "example.com"
     assert rr_name == "_acme-challenge"
     assert rr_type == "TXT"
-    # Should preserve old value and add new one
-    assert values == ('"old"', '"abc123"')
-
-    # Response rrset contains records (first one is preserved old value)
-    assert len(resp.rrset.records) > 0
-
-def test_put_txt_record_preserves_multiple_existing_records(helper):
-    zones = helper.client.zones
-    # Multiple existing records
-    zones._rrset_list = FakeRRSetListResp([FakeRRSet("_acme-challenge", '"token1"', '"token2"')])
-
-    helper.put_txt_record("example.com", "_acme-challenge", value="token3", comment="test")
-
-    # Should create with all three values
-    create_call = [c for c in zones.calls if c[0] == "create_rrset"][-1]
-    _, zone_name, rr_name, rr_type, values = create_call
-    assert values == ('"token1"', '"token2"', '"token3"')
+    assert rr_ttl == 60
+    # we only create the new values
+    assert values == ('"abc123"',)
 
 def test_put_txt_record_avoids_duplicates(helper):
     zones = helper.client.zones
     # Record with same value already exists
-    zones._rrset_list = FakeRRSetListResp([FakeRRSet("_acme-challenge", '"token1"', '"abc123"')])
-
-    helper.put_txt_record("example.com", "_acme-challenge", value="abc123", comment="test")
-
-    # Should not duplicate, only have token1 and abc123
-    create_call = [c for c in zones.calls if c[0] == "create_rrset"][-1]
-    _, zone_name, rr_name, rr_type, values = create_call
-    assert values == ('"token1"', '"abc123"')
+    helper.put_txt_record("example.com", "_acme-challenge", value="abc1234", comment="test")
 
 def test_delete_txt_record_with_value_removes_only_that_value(helper):
     zones = helper.client.zones
@@ -181,24 +171,8 @@ def test_delete_txt_record_with_value_removes_only_that_value(helper):
 
     helper.delete_txt_record("example.com", "_acme-challenge", value="token1")
 
-    # Should delete and recreate with only token2
-    assert ("delete_rrset", "_acme-challenge") in zones.calls
-    create_call = [c for c in zones.calls if c[0] == "create_rrset"]
-    assert len(create_call) == 1
-    _, zone_name, rr_name, rr_type, values = create_call[0]
-    assert values == ('"token2"',)
-
-def test_delete_txt_record_with_value_deletes_all_when_last_removed(helper):
-    zones = helper.client.zones
-    # Only one record exists
-    zones._rrset_list = FakeRRSetListResp([FakeRRSet("_acme-challenge", '"token1"')])
-
-    helper.delete_txt_record("example.com", "_acme-challenge", value="token1")
-
-    # Should delete but not recreate (no remaining records)
-    assert ("delete_rrset", "_acme-challenge") in zones.calls
-    create_calls = [c for c in zones.calls if c[0] == "create_rrset"]
-    assert len(create_calls) == 0
+    # Should remove only token1, leaving token2 intact
+    assert ("remove_rrset_records", "_acme-challenge", ('"token1"',)) in zones.calls
 
 def test_delete_txt_record_without_value_deletes_all(helper):
     zones = helper.client.zones
@@ -208,6 +182,4 @@ def test_delete_txt_record_without_value_deletes_all(helper):
     helper.delete_txt_record("example.com", "_acme-challenge", value=None)
 
     # Should delete entire rrset without recreation
-    assert ("delete_rrset", "_acme-challenge") in zones.calls
-    create_calls = [c for c in zones.calls if c[0] == "create_rrset"]
-    assert len(create_calls) == 0
+    assert ("remove_rrset_records", "_acme-challenge", ('"token1"', '"token2"')) in zones.calls
