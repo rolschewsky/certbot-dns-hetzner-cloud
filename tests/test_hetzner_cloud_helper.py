@@ -56,8 +56,9 @@ class FakeZonesAPI:
         self.calls.append(("remove_rrset_records", rrset.name, tuple(r.value for r in records)))
         return SimpleNamespace(wait_until_finished=lambda: None)
 
-    def add_rrset_records(self, rrset, records):
-        self.calls.append(("add_rrset_records", rrset.zone.name, rrset.name, rrset.type, rrset.ttl, tuple(r.value for r in records)))
+    def add_rrset_records(self, rrset, records, ttl=None):
+        # hcloud only sends the ttl parameter, a ttl on the rrset object is ignored
+        self.calls.append(("add_rrset_records", rrset.zone.name, rrset.name, rrset.type, ttl, tuple(r.value for r in records)))
         # Simulate duplicate value
         if records[0].value == 'abc1234':
             raise APIException(code="invalid_input", message="duplicate value ..", details=None)

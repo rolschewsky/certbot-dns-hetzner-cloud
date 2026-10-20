@@ -56,8 +56,9 @@ class HetznerCloudHelper:
 
         try:
             r = self.client.zones.add_rrset_records(
-                rrset=ZoneRRSet(zone=bound_zone, name=name, type="TXT", ttl=ttl),
-                records=[ZoneRecord(value=value, comment=comment)])
+                rrset=ZoneRRSet(zone=bound_zone, name=name, type="TXT"),
+                records=[ZoneRecord(value=value, comment=comment)],
+                ttl=ttl)
             r.wait_until_finished()
         except APIException as e:
             if e.code == 'invalid_input' and e.message.startswith('duplicate value'):
