@@ -1,4 +1,5 @@
 import pytest
+from types import SimpleNamespace
 from datetime import datetime, timezone
 from certbot_dns_hetzner_cloud.authenticator import HetznerCloudDNSAuthenticator
 
@@ -8,10 +9,13 @@ class DummyHelper:
     def __init__(self):
         self.put_calls = []
 
-    def put_txt_record(self, *, zone: str, name: str, value: str, comment: str):
+    def find_zone(self, fqdn):
+        return SimpleNamespace(name="example.com")
+
+    def put_txt_record(self, *, zone, name: str, value: str, comment: str, ttl: int):
         # Basic validation: value should not be quoted (Certbot handles raw TXT values)
         assert not value.startswith('"') and not value.endswith('"')
-        self.put_calls.append((zone, name, value, comment))
+        self.put_calls.append((zone.name, name, value, comment, ttl))
 
 
 @pytest.fixture
@@ -43,7 +47,7 @@ def test_perform_creates_expected_txt_record(authenticator):
     assert len(dummy.put_calls) == 1, "expected exactly one TXT record creation call"
 
     # Unpack recorded call arguments
-    zone, name, value, comment = dummy.put_calls[0]
+    zone, name, value, comment, ttl = dummy.put_calls[0]
 
     # Zone should be the registered domain
     assert zone == "example.com", f"unexpected zone: {zone}"
@@ -54,3 +58,5 @@ def test_perform_creates_expected_txt_record(authenticator):
     # Comment must contain ISO8601 UTC timestamp and plugin marker
     assert "created by hetzner cloud plugin" in comment.lower()
     datetime.fromisoformat(comment.split()[-1].replace("Z", "+00:00"))  # should parse cleanly
+    # ttl should be default
+    assert ttl == 60

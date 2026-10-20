@@ -10,13 +10,21 @@ permissions:
 
 jobs:
   snap:
-    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    strategy:
+      # one architecture failing must not stop the other from being published
+      fail-fast: false
+      matrix:
+        runner: [ ubuntu-24.04, ubuntu-24.04-arm ]
+    runs-on: ${{ matrix.runner }}
     env:
       SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_TOKEN }}
     steps:
       - name: "Checkout"
         uses: actions/checkout@v4
         with:
+          # build the tagged commit of the release, not the latest commit on the default branch
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
       - name: "Install Snapcraft"
@@ -31,7 +39,7 @@ jobs:
       - name: "Upload Snap Artifact"
         uses: actions/upload-artifact@v4
         with:
-          name: built-snap
+          name: built-snap-${{ matrix.runner }}
           path: ${{ steps.build.outputs.snap }}
 
       - name: "Publish Snap to Store"

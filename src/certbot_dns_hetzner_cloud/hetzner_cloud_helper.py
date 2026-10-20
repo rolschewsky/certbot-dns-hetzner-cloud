@@ -1,7 +1,7 @@
 from typing import Union
 
-from hcloud import Client
-from hcloud.zones import BoundZone, ZoneRecord
+from hcloud import Client, APIException
+from hcloud.zones import BoundZone, ZoneRecord, ZoneRRSet
 from hcloud.zones.domain import CreateZoneRRSetResponse
 
 class HetznerCloudHelper:
@@ -14,6 +14,12 @@ class HetznerCloudHelper:
         if isinstance(zone, BoundZone):
             return zone
         return self.client.zones.get(zone)
+
+    def find_zone(self, fqdn: str) -> BoundZone | None:
+        """Returns the zone of the project that fqdn belongs to, the most specific one if zones are nested."""
+        fqdn = fqdn.rstrip(".").lower()
+        zones = [zone for zone in self.client.zones.get_all() if fqdn == zone.name or fqdn.endswith("." + zone.name)]
+        return max(zones, key=lambda zone: len(zone.name), default=None)
 
     def delete_txt_record(self, zone: Union[str, BoundZone], name: str, value: str | None = None) -> None:
         """Delete a TXT record or a specific value from it.
@@ -33,24 +39,19 @@ class HetznerCloudHelper:
 
         # delete if exists
         if len(query_result.rrsets) > 0:
-            if value is None:
-                # delete entire rrset
-                self.client.zones.delete_rrset(query_result.rrsets[0])
-            else:
-                # remove only the specific value
-                remaining_records = [record for record in query_result.rrsets[0].records if record.value != value]
-                self.client.zones.delete_rrset(query_result.rrsets[0])
-                
-                # recreate with remaining records if any
-                if remaining_records:
-                    self.client.zones.create_rrset(
-                        zone=bound_zone,
-                        name=name,
-                        type="TXT",
-                        records=remaining_records
-                    )
+            # remove only the specific value from the RecordSet or all if value is None
+            records_to_delete = [record for record in query_result.rrsets[0].records if
+                                 value is None or record.value == value]
+            if len(records_to_delete) > 0:
+                # This API will also remove the whole rrset if no record is left
+                r = self.client.zones.remove_rrset_records(
+                    rrset=query_result.rrsets[0],
+                    records=records_to_delete,
+                )
+                r.wait_until_finished()
 
-    def put_txt_record(self, zone: Union[str, BoundZone], name: str, value: str, comment: str | None = None) -> CreateZoneRRSetResponse:
+    def put_txt_record(self, zone: Union[str, BoundZone], name: str, value: str,
+                       comment: str | None = None, ttl: int | None = 60) -> CreateZoneRRSetResponse:
         """Create or update a TXT record."""
         # ensure value is quoted
         if not (value.startswith("\"") and value.endswith("\"")):
@@ -59,21 +60,15 @@ class HetznerCloudHelper:
         # load zone object
         bound_zone = self._ensure_zone(zone)
 
-        # check for existing TXT records
-        query_result = self.client.zones.get_rrset_list(zone=bound_zone, name=name, type="TXT")
-        
-        existing_records = []
-        if len(query_result.rrsets) > 0:
-            # preserve existing records and delete the rrset
-            existing_records = [record for record in query_result.rrsets[0].records if record.value != value]
-            self.client.zones.delete_rrset(query_result.rrsets[0])
-
-        # create new TXT record with all values (existing + new)
-        all_records = existing_records + [ZoneRecord(value=value, comment=comment)]
-        
-        return self.client.zones.create_rrset(
-            zone=bound_zone,
-            name=name,
-            type="TXT",
-            records=all_records
-        )
+        try:
+            r = self.client.zones.add_rrset_records(
+                rrset=ZoneRRSet(zone=bound_zone, name=name, type="TXT"),
+                records=[ZoneRecord(value=value, comment=comment)],
+                ttl=ttl)
+            r.wait_until_finished()
+        except APIException as e:
+            if e.code == 'invalid_input' and e.message.startswith('duplicate value'):
+                # if it's already there, we can ignore it
+                pass
+            else:
+                raise e
