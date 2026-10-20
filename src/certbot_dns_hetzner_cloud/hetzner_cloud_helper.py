@@ -15,6 +15,12 @@ class HetznerCloudHelper:
             return zone
         return self.client.zones.get(zone)
 
+    def find_zone(self, fqdn: str) -> BoundZone | None:
+        """Returns the zone of the project that fqdn belongs to, the most specific one if zones are nested."""
+        fqdn = fqdn.rstrip(".").lower()
+        zones = [zone for zone in self.client.zones.get_all() if fqdn == zone.name or fqdn.endswith("." + zone.name)]
+        return max(zones, key=lambda zone: len(zone.name), default=None)
+
     def delete_txt_record(self, zone: Union[str, BoundZone], name: str, value: str | None = None) -> None:
         """Delete a TXT record or a specific value from it.
         

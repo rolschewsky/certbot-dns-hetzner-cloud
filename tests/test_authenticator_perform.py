@@ -1,4 +1,5 @@
 import pytest
+from types import SimpleNamespace
 from datetime import datetime, timezone
 from certbot_dns_hetzner_cloud.authenticator import HetznerCloudDNSAuthenticator
 
@@ -8,10 +9,13 @@ class DummyHelper:
     def __init__(self):
         self.put_calls = []
 
-    def put_txt_record(self, *, zone: str, name: str, value: str, comment: str, ttl: int):
+    def find_zone(self, fqdn):
+        return SimpleNamespace(name="example.com")
+
+    def put_txt_record(self, *, zone, name: str, value: str, comment: str, ttl: int):
         # Basic validation: value should not be quoted (Certbot handles raw TXT values)
         assert not value.startswith('"') and not value.endswith('"')
-        self.put_calls.append((zone, name, value, comment, ttl))
+        self.put_calls.append((zone.name, name, value, comment, ttl))
 
 
 @pytest.fixture

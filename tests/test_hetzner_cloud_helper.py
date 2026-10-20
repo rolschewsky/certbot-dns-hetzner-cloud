@@ -31,6 +31,10 @@ class FakeZonesAPI:
         self.bound_zone = SimpleNamespace(id="Z1", name="example.com")
 
     # Zonen
+    def get_all(self):
+        self.calls.append(("get_all",))
+        return self.all_zones
+
     def get(self, zone_name):
         self.calls.append(("get", zone_name))
         assert zone_name == "example.com"

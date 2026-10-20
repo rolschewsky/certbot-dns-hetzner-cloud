@@ -1,4 +1,5 @@
 import pytest
+from types import SimpleNamespace
 from certbot_dns_hetzner_cloud.authenticator import HetznerCloudDNSAuthenticator
 
 
@@ -7,8 +8,11 @@ class DummyHelper:
     def __init__(self):
         self.delete_calls = []
 
-    def delete_txt_record(self, *, zone: str, name: str, value: str = None):
-        self.delete_calls.append((zone, name, value))
+    def find_zone(self, fqdn):
+        return SimpleNamespace(name="example.com")
+
+    def delete_txt_record(self, *, zone, name: str, value: str = None):
+        self.delete_calls.append((zone.name, name, value))
 
 
 @pytest.fixture

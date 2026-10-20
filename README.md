@@ -52,6 +52,9 @@ sudo chmod 600 /etc/letsencrypt/hetzner_cloud.ini
 
 If you want to use a different path for the configuration file, you can specify it using the `--dns-hetzner-cloud-credentials` option when running Certbot.
 
+The token must belong to the Hetzner Cloud project that contains the zone. The plugin looks up the zones of that 
+project and uses the most specific one the name belongs to, so zones for subdomains work as well.
+
 ## Usage
 You can use the plugin with Certbot by specifying the `dns-hetzner-cloud` authenticator. 
 Here is an example command to obtain a certificate for a wildcard subdomain:
