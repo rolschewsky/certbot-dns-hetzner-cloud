@@ -47,8 +47,8 @@ def test_relative_name(fqdn, zone, expected):
     assert relative_name(fqdn, zone) == expected
 
 
-def test_perform_without_zone_raises_plugin_error():
-    auth = HetznerCloudDNSAuthenticator(config=None, name="dns-hetzner-cloud")
+def test_perform_without_zone_raises_plugin_error(config):
+    auth = HetznerCloudDNSAuthenticator(config=config, name="dns-hetzner-cloud")
     auth.hetzner_dns_helper = helper_with_zones("other.com")
 
     with pytest.raises(errors.PluginError, match="No zone for _acme-challenge.example.com"):

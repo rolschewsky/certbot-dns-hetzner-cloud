@@ -17,6 +17,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "certbot>=2.0",
+    "dnspython>=2.1.0",
     "hcloud>=2.8.0"
 ]
 [project.optional-dependencies]

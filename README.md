@@ -73,5 +73,32 @@ certbot certonly --agree-tos \
   -d '*.example.eu'
 ```
 
+## Options
+The following options can be given on the command line or in the credentials file:
+
+| Command line                                  | Credentials file                               | Default |
+|-----------------------------------------------|------------------------------------------------|---------|
+| `--dns-hetzner-cloud-propagation-seconds 120` | `dns_hetzner_cloud_propagation_seconds = 120` | `30`    |
+| `--dns-hetzner-cloud-follow-cname`            | `dns_hetzner_cloud_follow_cname = true`        | off     |
+
+A value on the command line (or in Certbot's `cli.ini`) takes precedence over the credentials file. Certbot stores 
+command line values for renewal, so they keep winning on every renewal of that certificate. Values in the credentials 
+file are read on every run, so changing the file takes effect on the next renewal.
+
+### Propagation seconds
+The number of seconds the plugin waits after creating the TXT record before Let's Encrypt checks it. Raise it if 
+validation fails with "No TXT record found".
+
+### Follow CNAME
+With this option the plugin resolves `_acme-challenge.<domain>` before creating the TXT record. If it is a CNAME, the 
+record is created in the zone the CNAME points to. This lets you keep the API token away from your main zone:
+
+1. Create a separate zone, e.g. `acme-example.eu`, in its own Hetzner Cloud project and create the API token there.
+2. Add a CNAME once per name in your main zone, e.g. `_acme-challenge.example.eu` → `example-eu.acme-example.eu`.
+3. Enable the option. For `*.example.eu` the plugin then creates the TXT record `example-eu` in `acme-example.eu`.
+
+The token can only change the separate zone. The CNAME is resolved with the system resolver; names without a CNAME 
+are handled as before.
+
 [1]:https://github.com/ctrlaltcoop/certbot-dns-hetzner
 [2]:https://certbot.eff.org/instructions
