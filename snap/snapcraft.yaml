@@ -6,6 +6,7 @@ summary: Certbot DNS-01 authenticator for Hetzner Cloud DNS.
 description: |
   This is a Certbot DNS plugin for the new Hetzner Cloud DNS, which allows you to automate the process of obtaining and 
   renewing SSL/TLS certificates using the DNS-01 challenge method. This Plugin is not compatible with the old Hetzner DNS
+  Console.
 grade: stable
 confinement: strict
 license: MIT
@@ -14,6 +15,10 @@ source-code: https://github.com/rolschewsky/certbot-dns-hetzner-cloud
 website: https://github.com/rolschewsky/certbot-dns-hetzner-cloud
 donation: https://www.sos-kinderdorf.de/spenden
 adopt-info: plugin
+# each architecture is built on a runner of its own, see .github/workflows/publish-snapcraft.yml
+platforms:
+  amd64:
+  arm64:
 parts:
   plugin:
     plugin: python
