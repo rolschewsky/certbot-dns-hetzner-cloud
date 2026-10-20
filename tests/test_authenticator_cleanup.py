@@ -16,9 +16,9 @@ class DummyHelper:
 
 
 @pytest.fixture
-def authenticator(monkeypatch):
+def authenticator(config):
     """Fixture that sets up an Authenticator with a mocked Hetzner helper."""
-    auth = HetznerCloudDNSAuthenticator(config=None, name="dns-hetzner-cloud")
+    auth = HetznerCloudDNSAuthenticator(config=config, name="dns-hetzner-cloud")
 
     # Replace the real helper with our dummy mock
     dummy = DummyHelper()
