@@ -63,9 +63,11 @@ class FakeZonesAPI:
     def add_rrset_records(self, rrset, records, ttl=None):
         # hcloud only sends the ttl parameter, a ttl on the rrset object is ignored
         self.calls.append(("add_rrset_records", rrset.zone.name, rrset.name, rrset.type, ttl, tuple(r.value for r in records)))
-        # Simulate duplicate value
-        if records[0].value == 'abc1234':
+        # Simulate duplicate value; the helper sends the value quoted
+        if records[0].value == '"abc1234"':
             raise APIException(code="invalid_input", message="duplicate value ..", details=None)
+        if records[0].value == '"forbidden"':
+            raise APIException(code="forbidden", message="insufficient permissions", details=None)
         return SimpleNamespace(wait_until_finished=lambda: None)
 
 class FakeClient:
@@ -166,8 +168,13 @@ def test_put_txt_record_quotes_value_and_replaces(helper):
 
 def test_put_txt_record_avoids_duplicates(helper):
     zones = helper.client.zones
-    # Record with same value already exists
+    # Record with same value already exists: the API error is ignored
     helper.put_txt_record("example.com", "_acme-challenge", value="abc1234", comment="test")
+    assert [c for c in zones.calls if c[0] == "add_rrset_records"]
+
+def test_put_txt_record_raises_other_api_errors(helper):
+    with pytest.raises(APIException, match="insufficient permissions"):
+        helper.put_txt_record("example.com", "_acme-challenge", value="forbidden", comment="test")
 
 def test_delete_txt_record_with_value_removes_only_that_value(helper):
     zones = helper.client.zones
